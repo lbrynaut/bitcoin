@@ -32,6 +32,7 @@ $(package)_cxxflags_linux=-fPIC
 # So we substitute poorly (as these may not actually match all scenarios):
 $(package)_ldflags_mingw32=-L$(host_prefix)/lib -lsicuio -lsicuuc -lsicudt 
 $(package)_ldflags_linux=-L$(host_prefix)/lib -licuio -licuuc -licudata -licui18n
+$(package)_ldflags_darwin=-L$(host_prefix)/lib -licuio -licuuc -licudata -licui18n
 endef
 
 define $(package)_preprocess_cmds

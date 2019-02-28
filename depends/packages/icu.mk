@@ -12,6 +12,8 @@ define $(package)_set_vars
   $(package)_config_opts_release=--disable-debug --enable-release
   $(package)_config_opts_mingw32=--with-cross-build="`pwd`/../build"
   $(package)_config_opts_linux=--with-pic
+  $(package)_config_opts_darwin=--with-cross-build="`pwd`/../build" LIBTOOL="$($(package)_libtool)"
+  $(package)_archiver_darwin=$($(package)_libtool)
 endef
 
 define $(package)_config_cmds
