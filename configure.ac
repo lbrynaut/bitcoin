@@ -646,7 +646,9 @@ if test x$ac_cv_sys_large_files != x &&
   CPPFLAGS="$CPPFLAGS -D_LARGE_FILES=$ac_cv_sys_large_files"
 fi
 
-AX_CHECK_LINK_FLAG([[-static-libstdc++]], [LDFLAGS="$LDFLAGS -static-libstdc++"])
+if test x$enable_static != x; then
+  AX_CHECK_LINK_FLAG([[-static-libstdc++]], [LDFLAGS="$LDFLAGS -static-libstdc++"])
+fi
 AX_CHECK_LINK_FLAG([[-Wl,--large-address-aware]], [LDFLAGS="$LDFLAGS -Wl,--large-address-aware"])
 
 AX_GCC_FUNC_ATTRIBUTE([visibility])
@@ -702,8 +704,6 @@ fi
 
 if test x$use_hardening != xno; then
   use_hardening=yes
-  AX_CHECK_COMPILE_FLAG([-Wstack-protector],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -Wstack-protector"])
-  AX_CHECK_COMPILE_FLAG([-fstack-protector-all],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fstack-protector-all"])
 
   AX_CHECK_PREPROC_FLAG([-D_FORTIFY_SOURCE=2],[
     AX_CHECK_PREPROC_FLAG([-U_FORTIFY_SOURCE],[
@@ -722,6 +722,10 @@ if test x$use_hardening != xno; then
   case $host in
     *mingw*)
        AC_CHECK_LIB([ssp],      [main],, AC_MSG_ERROR(libssp missing))
+    ;;
+    *)
+       AX_CHECK_COMPILE_FLAG([-Wstack-protector],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -Wstack-protector"])
+       AX_CHECK_COMPILE_FLAG([-fstack-protector-all],[HARDENED_CXXFLAGS="$HARDENED_CXXFLAGS -fstack-protector-all"])
     ;;
   esac
 fi
@@ -1060,19 +1064,25 @@ fi
 
 fi
 
-AS_IF([test "x$ICU_PREFIX" != xauto], [
-  ICU_CPPFLAGS="-I$ICU_PREFIX/include"
-  ICU_LIBS="-L$ICU_PREFIX/lib -licui18n -licuuc -licudata -ldl"
-  PKG_CONFIG_PATH="${ICU_PREFIX}/lib/pkgconfig:$PKG_CONFIG_PATH"
-  export PKG_CONFIG_PATH
+# the plan for dealing with ICU:
+# if the user specifies an ICU prefix, use that one.
+# if the user did not specify an ICU prefix but did specify a general prefix use that one.
+# otherwise use pkg_config if it's available.
+# well, actually, things seem to work fine without this fallback to pkg_config so we'll leave that out for now.
+# note: in order to use AC_CHECK_LIB we have to override CPPFLAGS and LDFLAGS
+# however, we don't want to keep those overridden after our checks; 
+# we want to rely on ICU_CPPFLAGS and ICU_LIBS after that
+# to further complicate matters there are at least three different naming conventions for ICU libraries
+# to simplify things we'll just check one from each convention
+
+AS_IF([test "x${prefix}" != "xNONE" && test "x$ICU_PREFIX" == "xauto"], [
+  ICU_PREFIX="${prefix}"
+])  
+
+AS_IF([test "x$ICU_PREFIX" != "xauto"], [
+  ICU_CPPFLAGS="$(PKG_CONFIG_SYSROOT_DIR=/ PKG_CONFIG_LIBDIR=$ICU_PREFIX/lib/pkgconfig PKG_CONFIG_PATH=$ICU_PREFIX/share/pkgconfig pkg-config icu-io icu-uc icu-i18n --cflags)"
+  ICU_LIBS="$(PKG_CONFIG_SYSROOT_DIR=/ PKG_CONFIG_LIBDIR=$ICU_PREFIX/lib/pkgconfig PKG_CONFIG_PATH=$ICU_PREFIX/share/pkgconfig pkg-config icu-io icu-uc icu-i18n --libs)"
 ])
-
-AC_MSG_NOTICE([Using ICU_CPPFLAGS $ICU_CPPFLAGS])
-AC_MSG_NOTICE([Using ICU_LIBS $ICU_LIBS])
-
-CPPFLAGS="$CPPFLAGS $ICU_CPPFLAGS"
-ORIG_LDFLAGS=$LDFLAGS
-LDFLAGS="$LDFLAGS $ICU_LIBS"
 
 if test x$use_pkgconfig = xyes; then
   : dnl
@@ -1101,20 +1111,14 @@ if test x$use_pkgconfig = xyes; then
       else
           AC_DEFINE_UNQUOTED([ENABLE_ZMQ],[0],[Define to 1 to enable ZMQ functions])
       fi
+
+      if test "x$ICU_PREFIX" == "xauto"; then
+        PKG_CHECK_MODULES([ICU], [icu-io, icu-uc, icu-i18n])
+      fi
     ]
   )
-else # compiling on Windows:
-  AC_MSG_NOTICE([Configuring for Windows])
-
-  CPPFLAGS="$CPPFLAGS -Ii686-w64-mingw32/include"
-  LDFLAGS="$LDFLAGS -Li686-w64-mingw32/lib"
-
-  AC_CHECK_HEADER([unicode/errorcode.h],,AC_MSG_ERROR(libicu headers missing))
-  AC_CHECK_LIB([icudata], [main], ICU_LIBS=$ICU_LIBS,
-    AC_CHECK_LIB([icu18n], [main],ICU_LIBS=$ICU_LIBS, ICU_LIBS="-L$ICU_PREFIX/lib -lsicuio -lsicuin -lsiculx -lsicule -lsicuuc -lsicudt"))
-  AC_MSG_NOTICE([Using ICU_LIBS=$ICU_LIBS])
-  LDFLAGS="$ORIG_LDFLAGS $ICU_LIBS"
-  AC_CHECK_LIB([sicudt], [main], ICU_LIBS=$ICU_LIBS, AC_MSG_ERROR(icu libraries missing))
+else # probably compiling on Windows or cross-compiling for it:
+  AC_MSG_NOTICE([Configuring for MinGW])
 
   AC_CHECK_HEADER([openssl/crypto.h],,AC_MSG_ERROR(libcrypto headers missing))
   AC_CHECK_LIB([crypto],      [main],CRYPTO_LIBS=-lcrypto, AC_MSG_ERROR(libcrypto missing))
@@ -1159,6 +1163,9 @@ else # compiling on Windows:
     BITCOIN_QT_CHECK([AC_CHECK_HEADER([qrencode.h],, have_qrencode=no)])
   fi
 fi
+
+AC_MSG_NOTICE([Using ICU_CPPFLAGS="$ICU_CPPFLAGS"])
+AC_MSG_NOTICE([Using ICU_LIBS="$ICU_LIBS"])
 
 save_CXXFLAGS="${CXXFLAGS}"
 CXXFLAGS="${CXXFLAGS} ${CRYPTO_CFLAGS} ${SSL_CFLAGS}"

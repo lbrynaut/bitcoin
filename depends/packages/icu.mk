@@ -1,18 +1,26 @@
 package=icu
-$(package)_version=57_1
-$(package)_download_path=http://download.icu-project.org/files/icu4c/57.1
+$(package)_version=62_1
+$(package)_download_path=http://download.icu-project.org/files/icu4c/62.1
 $(package)_file_name=$(package)4c-$($(package)_version)-src.tgz
-$(package)_sha256_hash=ff8c67cb65949b1e7808f2359f2b80f722697048e90e7cfc382ec1fe229e9581
+$(package)_sha256_hash=3dd9868d666350dda66a6e305eecde9d479fb70b30d5b55d78a1deffb97d5aa3
 $(package)_build_subdir=source
+$(package)_standard_opts=--disable-extras --disable-strict --enable-static --disable-shared --disable-tests --disable-samples --disable-dyload --disable-layoutex
 
 define $(package)_set_vars
-  $(package)_config_opts=--enable-debug --disable-release --host=i686-w64-mingw32 --with-cross-build=/tmp/icu_staging/icu/source --enable-extras=no --enable-strict=no --enable-static --enable-shared=no --enable-tests=no --enable-samples=no --enable-dyload=no
+  $(package)_config_opts=$($(package)_standard_opts)
+  $(package)_config_opts_debug=--enable-debug --disable-release
   $(package)_config_opts_release=--disable-debug --enable-release
-  $(package)_config_opts_mingw32=--host=i686-w64-mingw32
+  $(package)_config_opts_mingw32=--with-cross-build="`pwd`/../build"
   $(package)_config_opts_linux=--with-pic
 endef
 
 define $(package)_config_cmds
+  PKG_CONFIG_SYSROOT_DIR=/ \
+  PKG_CONFIG_LIBDIR=$(host_prefix)/lib/pkgconfig \
+  PKG_CONFIG_PATH=$(host_prefix)/share/pkgconfig \
+  mkdir -p ../build && cd ../build && \
+  ../source/runConfigureICU `uname` $($(package)_standard_opts) --with-pic && \
+  make -j`nproc` && cd ../source && \
   $($(package)_autoconf)
 endef
 
@@ -21,5 +29,5 @@ define $(package)_build_cmds
 endef
 
 define $(package)_stage_cmds
-  $(MAKE) DESTDIR=/tmp/icu_install install
+  $(MAKE) DESTDIR=$($(package)_staging_dir) install
 endef

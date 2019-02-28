@@ -13,6 +13,7 @@ src/lbrycrdd
 src/lbrycrd-cli
 src/lbrycrd-tx
 src/test/test_lbrycrd
+src/test/test_lbrycrd_fuzzy
 src/qt/test/test_lbrycrd-qt
 
 # autoreconf
